@@ -30,7 +30,7 @@ class S3itchApp < Sinatra::Base
       filename = "#{r}#{File.extname(media[:filename])}"
       content_type = media[:type]
       file = bucket.files.create({
-        key: "tweetbot/#{filename}",
+        key: "_/#{filename}",
         public: true,
         body: open(media[:tempfile]),
         content_type: content_type,
@@ -124,7 +124,8 @@ EOF
   end
 
   def b62ts
-    t = Time.now.to_i
+    # Reversing
+    t = Time.now.to_i.to_s.reverse.to_i
     s = ''
     while t > 0
       s << SIXTYTWO[(t.modulo(62))]

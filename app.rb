@@ -5,7 +5,7 @@ require "sinatra"
 require "fog"
 require "mime/types"
 require "uri"
-require "rmagick"
+require "RMagick"
 include Magick
 
 # TODO: Player card support. Maybe. Video is annoying.

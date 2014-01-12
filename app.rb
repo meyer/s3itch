@@ -5,6 +5,12 @@ require "sinatra"
 require "fog"
 require "mime/types"
 require "uri"
+require "rmagick"
+include Magick
+
+# TODO: Player card support. Maybe. Video is annoying.
+TWITTER_PHOTO_CARDS_ENABLED = false
+TWITTER_PLAYER_CARDS_ENABLED = false
 
 SIXTYTWO = ("0".."9").to_a + ("a".."z").to_a + ("A".."Z").to_a
 
@@ -21,44 +27,88 @@ class S3MediaUploader < Sinatra::Base
     erb :index, :locals => {message: "Nothing to see here."}
   end
 
-  get "/tweetbot/*" do
+  post "/tweetbot/*" do
+    media = params["media"]
+
     # Increment counter
-    counter_filename = "/s/counter.txt"
+    counter_filename = "s/_counter.txt"
     begin
-      counter_file = bucket.files.get(counter_filename)
-      counter = counter_file.body.to_i + 1
-      counter_file.body = counter
-      counter_file.save
+      counter = bucket.files.get(counter_filename).body.to_i + 1
     rescue
       counter = 1
-      counter_file = bucket.files.create(
-        :key => counter_filename,
-        :body   => counter,
-        :public => false
-      )
     end
 
+    counter_file = bucket.files.create(
+      :key => counter_filename,
+      :body   => counter.to_s,
+      :public => false, # none of your business
+      :content_type => "text/plain"
+    )
+
+    # TODO: Tweak this.
+    counter += 18000
+
     # Generate
-    upload_key = generate_key counter
+    upload_key = "s/#{generate_key(counter)}"
+    ext = File.extname(media[:filename])
+
+    # puts upload_key+"!!!"
+    # throw :halt, response
 
     retries = 0
     begin
-      media = params["media"]
-      filename = "#{b62ts}#{File.extname(media[:filename])}"
       content_type = media[:type]
-      file = bucket.files.create({
-        key: "s/#{filename}",
+
+      # Save source image
+      source_img_s3 = bucket.files.create(
+        key: "#{upload_key}#{ext}",
         public: true,
         body: open(media[:tempfile]),
         content_type: content_type,
         metadata: { "Cache-Control" => "public, max-age=315360000"}
-      })
+      )
 
-      if ENV["NO_CNAME"]
-        return "<mediaurl>#{file.public_url}</mediaurl>"
-      else
-        return "<mediaurl>http://#{ENV["S3_BUCKET"]}/#{file.key}</mediaurl>"
+      # Conditionally generate
+      media_card_s3 = nil
+
+      if TWITTER_PHOTO_CARDS_ENABLED
+
+        case ext
+        when ".png", ".jpg"
+          preview_img_s3 = source_img_s3
+
+          # Resize image if it needs it.
+          preview_img = Image.read(media[:tempfile].path).first.change_geometry ('750x560>') do |cols, rows, img|
+            img.resize_to_fit!(cols, rows)
+            preview_img_s3 = bucket.files.create(
+              key: "#{upload_key}/preview#{ext}",
+              public: true,
+              body: img.to_blob,
+              content_type: content_type,
+              metadata: { "Cache-Control" => "public, max-age=315360000"}
+            )
+            img
+          end
+
+          media_card_data = {
+            width: preview_img.columns,
+            height: preview_img.rows,
+            preview_img: "http://#{ENV["S3_BUCKET"]}/#{preview_img_s3.key}",
+            source_img:  "http://#{ENV["S3_BUCKET"]}/#{source_img_s3.key}",
+            source_img_name: "#{upload_key}#{ext}"
+          }
+
+          media_card_s3 = bucket.files.create(
+            key: "#{upload_key}/index.html",
+            public: true,
+            body: erb(:media, :locals => media_card_data),
+            content_type: "text/html",
+            metadata: { "Cache-Control" => "public, max-age=315360000"}
+          )
+        end
       end
+
+      return "<mediaurl>http://#{ENV["S3_BUCKET"]}/#{upload_key}#{(media_card_s3 ? "/" : ext)}</mediaurl>"
 
     rescue => e
       puts "Error uploading file #{media[:name]} to S3: #{e.message}"
@@ -72,13 +122,6 @@ class S3MediaUploader < Sinatra::Base
   end
 
   def bucket
-    # Bad idea.
-    # unless ENV["AWS_ACCESS_KEY_ID"] and ENV["AWS_SECRET_ACCESS_KEY"]
-    #   kcdata = `security find-internet-password 2>&1 -gs s3.amazonaws.com`
-    #   ENV["AWS_ACCESS_KEY_ID"] = kcdata[/"acct"<blob>="(.*)"/, 1]
-    #   ENV["AWS_SECRET_ACCESS_KEY"] = kcdata[/password: "(.*)"/, 1]
-    # end
-
     s3 = Fog::Storage.new({
       provider: "AWS",
       aws_access_key_id: ENV["AWS_ACCESS_KEY_ID"],
@@ -89,17 +132,15 @@ class S3MediaUploader < Sinatra::Base
   end
 
   def generate_key(i)
+    puts "Old counter: #{i}"
     s = ""
-
-    # LOL
-    i = (i.to_s(base=9).to_i + 1).to_s.reverse.to_i
+    i = (i.to_s(base=9).to_i + 1).to_s.reverse.to_i # LOL
+    puts "New counter: #{i}"
 
     while i > 0
-      puts "#{i}: #{s}"
       s << SIXTYTWO[(i.modulo(62))]
       i /= 62
     end
-    puts "#{s}"
     s.reverse
   end
 end

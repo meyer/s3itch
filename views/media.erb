@@ -1,9 +1,20 @@
 <!DOCTYPE html>
 <html>
 	<head>
-		<title>meyer.fm: <%= media[:filename] %></title>
+		<title>meyer.fm: <%= source_img_name %></title>
+		<meta name="twitter:card" content="photo">
+		<meta name="twitter:site" content="@meyer">
+		<meta name="twitter:creator" content="@meyer">
+		<meta name="twitter:image:src" content="<%= preview_img %>">
+		<meta name="twitter:image:width" content="<%= width %>">
+		<meta name="twitter:image:height" content="<%= height %>">
+		<meta name="twitter:title" content="">
+		<meta name="twitter:domain" content="meyer.fm">
 	</head>
 	<body>
-
+		<!-- Last updated: <%= Time.now %> -->
+		<div class="image">
+			<img src="<%= source_img %>">
+		</div>
 	</body>
 </html>

@@ -1,4 +1,4 @@
 require './app.rb'
 
 STDOUT.sync = true
-run S3itchApp
+run S3MediaUploader

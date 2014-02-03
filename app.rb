@@ -12,6 +12,8 @@ include Magick
 TWITTER_PHOTO_CARDS_ENABLED = false
 TWITTER_PLAYER_CARDS_ENABLED = false
 
+BUCKET_URL = "http://#{ENV["S3_BUCKET"]}/"
+
 SIXTYTWO = ("0".."9").to_a + ("a".."z").to_a + ("A".."Z").to_a
 
 class S3MediaUploader < Sinatra::Base
@@ -93,8 +95,8 @@ class S3MediaUploader < Sinatra::Base
           media_card_data = {
             width: preview_img.columns,
             height: preview_img.rows,
-            preview_img: "http://#{ENV["S3_BUCKET"]}/#{preview_img_s3.key}",
-            source_img:  "http://#{ENV["S3_BUCKET"]}/#{source_img_s3.key}",
+            preview_img: "#{BUCKET_URL}#{preview_img_s3.key}",
+            source_img:  "#{BUCKET_URL}#{source_img_s3.key}",
             source_img_name: "#{upload_key}#{ext}"
           }
 
@@ -108,7 +110,7 @@ class S3MediaUploader < Sinatra::Base
         end
       end
 
-      return "<mediaurl>http://#{ENV["S3_BUCKET"]}/#{upload_key}#{(media_card_s3 ? "/" : ext)}</mediaurl>"
+      return "<mediaurl>#{BUCKET_URL}#{upload_key}#{(media_card_s3 ? "/" : ext)}</mediaurl>"
 
     rescue => e
       puts "Error uploading file #{media[:name]} to S3: #{e.message}"
